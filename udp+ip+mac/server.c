@@ -13,16 +13,6 @@
 #include <net/if.h>
 #include <linux/if_packet.h>
 
-#define PORT 	 8050 
-#define MAXLINE 1024 
-
-struct pseudo_hdr {
-    u_int32_t source;
-    u_int32_t dest;
-    u_int8_t zero; 
-    u_int8_t protocol;
-    u_int16_t udp_length;
-};
 
 static unsigned short csum(unsigned short* addr, int len) 
 {
