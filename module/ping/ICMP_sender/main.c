@@ -13,14 +13,14 @@
 #include <net/icmp.h>
 #include <net/sock.h>
 #include <net/net_namespace.h>
-
+#include <linux/delay.h>
 
 static struct nf_hook_ops nfho;     // net filter hook option struct    
 struct udphdr *udp_header;          // udp header struct (not used)
 struct iphdr *ip_header;            // ip header struct
 struct ethhdr *mac_header;          // mac header struct
 struct icmphdr *icmp_header;	    // icmp header struct
-int flaginh = 0;
+int missed_packets = 0;
 
 MODULE_DESCRIPTION("ICMP's Sender");
 MODULE_AUTHOR("Vlad Rusmanov>");
@@ -30,14 +30,19 @@ static char ping[16] = {};
 
 static ssize_t b_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-	printk("Read IP");
+	char message_to_show[100];
 	
-	return sysfs_emit(buf, "%s", ping); 
+	//printk("Read IP");
+	
+	sprintf(message_to_show, "Ping result: %d missed packet from %s",missed_packets,ping);
+	
+	return sysfs_emit(buf, "%s", message_to_show); 
 }
 
 
 void build_and_send(void)
 {
+	static int counter = 1234;
 	struct sk_buff *sock_buff = NULL;
 	struct iphdr *ip_header_m = NULL;            
 	//struct ethhdr *mac_header_m = NULL;          
@@ -72,7 +77,8 @@ void build_and_send(void)
 	ip_header_m->ihl = sizeof(struct iphdr)/4;
 	ip_header_m->version = 4;
 	ip_header_m->tos = 0;
-	ip_header_m->id = htons(1234);
+	ip_header_m->id = htons(counter);
+	counter++;
 	ip_header_m->frag_off = 0;
 	ip_header_m->ttl = 255;
 	ip_header_m->protocol = IPPROTO_ICMP;
@@ -106,11 +112,17 @@ void build_and_send(void)
 
 static ssize_t b_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
 {
-	printk("Write IP");
+	int iterator;
+	//printk("Write IP");
 	
 	strncpy(ping,buf,sizeof(ping));
-	
-	build_and_send();
+	if(buf != NULL)
+	{
+		for(iterator=0;iterator<25;iterator++)
+		{
+			build_and_send();
+		}
+	}
 	
 	return count;
 }
@@ -143,39 +155,17 @@ unsigned int hook_func(void *priv, struct sk_buff *skb, const struct nf_hook_sta
         if (ip_header->protocol==IPPROTO_ICMP) 
         {
         	if (icmp_header->type==8)
-        	{			
-               		printk("#######Have a packet ECHO_REQUEST#######");	
+        	{	
+        		missed_packets++;		
+               		//printk("#######Have a packet ECHO_REQUEST#######");	
         	}
     		
     		if (icmp_header->type==0)
     		{	
-        		printk("#######Have a packet ECHO_REPLY#######");
+    			missed_packets--;
+        		//printk("#######Have a packet ECHO_REPLY#######");
         		
-        	}
-        
-                printk("###network_header###");     
-		printk(KERN_INFO "src_ip: %pI4 \n", &ip_header->saddr);
-        	printk(KERN_INFO "dst_ip: %pI4\n", &ip_header->daddr);
-        	printk(KERN_INFO "ihl: %d\n", ip_header->ihl);
-        	printk(KERN_INFO "version: %d\n", ip_header->version);
-        	printk(KERN_INFO "tos: %d\n", ip_header->tos);
-        	printk(KERN_INFO "id: %d\n", ntohs(ip_header->id));
-        	printk(KERN_INFO "frag_off: %d\n", ntohs(ip_header->frag_off));
-        	printk(KERN_INFO "ttl: %u\n", ip_header->ttl);
-        	printk(KERN_INFO "protocol: %u\n", ip_header->protocol);
-        	printk(KERN_INFO "check: %d\n", ip_header->check);        	
-        	
-        	printk("##mac_header##");
-        	printk(KERN_INFO "h_dest: %pM \n", &mac_header->h_dest);
-        	printk(KERN_INFO "h_source: %pM \n", &mac_header->h_source);
-        	printk(KERN_INFO "h_proto: %d \n", ntohs(mac_header->h_proto));
-
-        	
-        	printk("##icmp_header##");
-        	printk(KERN_INFO "type: %u \n", icmp_header->type);
-        	printk(KERN_INFO "code: %u \n", icmp_header->code);
-        	printk(KERN_INFO "checksum: %d \n", icmp_header->checksum);
-               	printk("#######End of a packet#######\n\n");
+        	}     
         }
        
         return NF_ACCEPT;
@@ -186,7 +176,7 @@ unsigned int hook_func(void *priv, struct sk_buff *skb, const struct nf_hook_sta
 int init_module()
 {	
 	int retval;
-	printk("LOAD KERNEL MODULE");
+	//printk("LOAD KERNEL MODULE");
 	example_kobj = kobject_create_and_add("kobject_example", kernel_kobj);
 	if (!example_kobj)
 		return -ENOMEM;
@@ -194,23 +184,23 @@ int init_module()
 	retval = sysfs_create_group(example_kobj, &attr_group);
 	if (retval)
 		kobject_put(example_kobj);
-	printk("LOADING COMPLETE\n");
+	//printk("LOADING COMPLETE\n");
 
         nfho.hook = hook_func;
         nfho.hooknum = 4; 
         nfho.pf = PF_INET;
         nfho.priority = NF_IP_PRI_FIRST;
         nf_register_net_hook(&init_net, &nfho); 
-        printk(KERN_INFO "---------------------------------------\n\n");
+        //printk(KERN_INFO "---------------------------------------\n\n");
 		
         return 0;
 }
  
 void cleanup_module()
 {
-	printk(KERN_INFO "---------------------------------------\n");
+	//printk(KERN_INFO "---------------------------------------\n");
         nf_unregister_net_hook(&init_net, &nfho); 
         kobject_put(example_kobj);
-	printk("KERNEL MODULE UNLOADED");    
+	//printk("KERNEL MODULE UNLOADED");    
 }
 
