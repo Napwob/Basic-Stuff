@@ -45,24 +45,26 @@ void build_and_send(void)
 	struct net_device *net_dev = NULL;
 	struct flowi4 fl4;
 	struct rtable *route_table = NULL;
+	//unsigned char mac_d[6]={0x00,0x00,0x00,0x00,0x00,0x00};
+	//unsigned char mac_s[6]={0x00,0x00,0x00,0x00,0x00,0x00};
 	
 	int len_skb = sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct icmphdr);
 	
 	sock_buff = alloc_skb(len_skb, GFP_ATOMIC);
-	printk(KERN_ALERT "after alloc\n");
-    	if (sock_buff == NULL) 
-    	{
-        	printk(KERN_ALERT "alloc_skb");
-        	return;
-   	}
 	
 	skb_reserve(sock_buff, len_skb); 
 	skb_push(sock_buff, sizeof(struct icmphdr));
 	skb_push(sock_buff, sizeof(struct iphdr));
+	skb_push(sock_buff, sizeof(struct ethhdr));
                 	
 	skb_set_mac_header(sock_buff, 0);       
-        skb_set_network_header(sock_buff, 0);	
-        skb_set_transport_header(sock_buff, sizeof(struct iphdr));	
+        skb_set_network_header(sock_buff, 0);//sizeof(struct ethhdr));	
+        skb_set_transport_header(sock_buff, sizeof(struct iphdr));// + sizeof(struct ethhdr));	
+        
+        /*mac_header_m = eth_hdr(sock_buff); 
+        memcpy(mac_header_m->h_dest,mac_d,6);
+        memcpy(mac_header_m->h_source,mac_s,6);
+        mac_header_m->h_proto = htons(0);*/
         
 	ip_header_m = ip_hdr(sock_buff);
 	ip_header_m->saddr = in_aton(ping);
@@ -74,7 +76,7 @@ void build_and_send(void)
 	ip_header_m->frag_off = 0;
 	ip_header_m->ttl = 255;
 	ip_header_m->protocol = IPPROTO_ICMP;
-	ip_header_m->tot_len = sizeof(struct iphdr) + sizeof(struct icmphdr);    
+	ip_header_m->tot_len = sizeof(struct iphdr) + sizeof(struct icmphdr);// + sizeof(struct ethhdr);    
 	    		
 	ip_header_m->check = 0x00;
 	ip_header_m->check = ip_compute_csum((void *)ip_header_m, sizeof(struct iphdr));
@@ -98,10 +100,8 @@ void build_and_send(void)
 	route_table = ip_route_output_key(&init_net, &fl4);
 
 	skb_dst_set(sock_buff, &route_table->dst);
-    
-	pr_info("ip_local_out: %d", ip_local_out(&init_net, NULL, sock_buff));
-	printk(KERN_ALERT "before ip_local_out\n");
-       
+
+	ip_local_out(&init_net, NULL, sock_buff);
 }
 
 static ssize_t b_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)

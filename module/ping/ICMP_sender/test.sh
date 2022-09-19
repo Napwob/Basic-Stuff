@@ -16,8 +16,8 @@ echo "Lets try write to ping"
 echo | ifconfig | tail | grep "inet " | cut -c14-30 | cut -d " " -f 1 > /sys/kernel/kobject_example/ping
 sudo echo "Read writed cache"; sudo cat /sys/kernel/kobject_example/ping
 
-#echo "Lets try ping \"127.0.0.1\""
-#ping 127.0.0.1 -c 5 -w 1 -W 1
+#echo "Lets try ping \"192.168.190.215\""
+#ping 192.168.190.215 -c 5 -w 1 -W 1
 
 echo "Lets unload module"
 sudo rmmod ./main.ko
