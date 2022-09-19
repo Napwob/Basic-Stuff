@@ -1,4 +1,4 @@
-#!/bin/bash
+-!/bin/bash
 
 echo "Preparation"
 sudo rmmod ./main.ko
@@ -12,12 +12,12 @@ sudo insmod ./main.ko
 echo "Module loaded"
 modinfo main.ko
 
-echo "Lets try write \"1.1.1.1\" to ping"
-sudo echo "1.1.1.1" > /sys/kernel/kobject_example/ping
+echo "Lets try write to ping"
+echo | ifconfig | tail | grep "inet " | cut -c14-30 | cut -d " " -f 1 > /sys/kernel/kobject_example/ping
 sudo echo "Read writed cache"; sudo cat /sys/kernel/kobject_example/ping
 
-echo "Lets try ping \"127.0.0.1\""
-ping 127.0.0.1 -c 5 -w 1 -W 1
+#echo "Lets try ping \"127.0.0.1\""
+#ping 127.0.0.1 -c 5 -w 1 -W 1
 
 echo "Lets unload module"
 sudo rmmod ./main.ko

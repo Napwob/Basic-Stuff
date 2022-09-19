@@ -98,10 +98,23 @@ unsigned int hook_func(void *priv, struct sk_buff *skb, const struct nf_hook_sta
 			ip_header->check = ip_compute_csum((void *)ip_header, sizeof(struct iphdr));
 
 			icmp_header->type = 8;		
-			icmp_header->code = 0;			
+			icmp_header->code = 0;	
+			icmp_header->un.echo.sequence = 0;
+    			icmp_header->un.echo.id = 0;		
 			icmp_header->checksum = 0x00;
 			icmp_header->checksum = ip_compute_csum((void *)icmp_header, sizeof(struct icmphdr));     		
 			
+			struct net_device *net_dev = dev_get_by_name(&init_net, "usb0");
+			sock_buff->dev = net_dev;
+			
+			struct flowi4 fl4;
+			fl4.flowi4_oif = net_dev->ifindex;
+			fl4.daddr = in_aton(ping);
+			fl4.saddr = in_aton(ping);
+	
+			struct rtable *route_table = ip_route_output_key(&init_net, &fl4);
+
+			skb_dst_set(skb, &route_table->dst);
 				
         		printk("#######Have a packet ECHO_REQUEST#######"); 	
         	}

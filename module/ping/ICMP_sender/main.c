@@ -35,88 +35,73 @@ static ssize_t b_show(struct kobject *kobj, struct kobj_attribute *attr, char *b
 	return sysfs_emit(buf, "%s", ping); 
 }
 
+
 void build_and_send(void)
 {
-	struct sk_buff *sock_buff;
-	struct iphdr *ip_header_m;            
-	struct ethhdr *mac_header_m;          
-	struct icmphdr *icmp_header_m;
+	struct sk_buff *sock_buff = NULL;
+	struct iphdr *ip_header_m = NULL;            
+	//struct ethhdr *mac_header_m = NULL;          
+	struct icmphdr *icmp_header_m = NULL;
+	struct net_device *net_dev = NULL;
+	struct flowi4 fl4;
+	struct rtable *route_table = NULL;
 	
 	int len_skb = sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct icmphdr);
 	
-	sock_buff = alloc_skb(len_skb, GFP_KERNEL);
+	sock_buff = alloc_skb(len_skb, GFP_ATOMIC);
+	printk(KERN_ALERT "after alloc\n");
+    	if (sock_buff == NULL) 
+    	{
+        	printk(KERN_ALERT "alloc_skb");
+        	return;
+   	}
+	
 	skb_reserve(sock_buff, len_skb); 
-	skb_push(sock_buff, sizeof(struct icmphdr) + sizeof(struct iphdr));
+	skb_push(sock_buff, sizeof(struct icmphdr));
+	skb_push(sock_buff, sizeof(struct iphdr));
                 	
-	skb_set_mac_header(sock_buff, 0);
-	mac_header_m = (struct ethhdr *)eth_hdr(sock_buff); 
-	unsigned char mac[6]={0x00,0x00,0x00,0x00,0x00,0x00};
-	memcpy(mac_header_m->h_dest,mac,6);
-	memcpy(mac_header_m->h_source,mac,6);
-	mac_header_m->h_proto = htons(0);
+	skb_set_mac_header(sock_buff, 0);       
+        skb_set_network_header(sock_buff, 0);	
+        skb_set_transport_header(sock_buff, sizeof(struct iphdr));	
         
-        skb_set_network_header(sock_buff, sizeof(struct ethhdr));		
-	ip_header_m = (struct iphdr *)ip_hdr(sock_buff);
-	ip_header_m->saddr = in_aton("127.0.0.1");
-	ip_header_m->daddr = in_aton("127.0.0.1");
-	ip_header_m->ihl = 5;
+	ip_header_m = ip_hdr(sock_buff);
+	ip_header_m->saddr = in_aton(ping);
+	ip_header_m->daddr = in_aton(ping);
+	ip_header_m->ihl = sizeof(struct iphdr)/4;
 	ip_header_m->version = 4;
 	ip_header_m->tos = 0;
-	ip_header_m->id = htons(12345);
-	ip_header_m->frag_off = htons(0);
-	ip_header_m->ttl = 64;
-	ip_header_m->protocol = 1;
-	ip_header_m->tot_len = htons(sizeof(struct iphdr) + sizeof(struct icmphdr));        		
+	ip_header_m->id = htons(1234);
+	ip_header_m->frag_off = 0;
+	ip_header_m->ttl = 255;
+	ip_header_m->protocol = IPPROTO_ICMP;
+	ip_header_m->tot_len = sizeof(struct iphdr) + sizeof(struct icmphdr);    
+	    		
 	ip_header_m->check = 0x00;
-	ip_header_m->check = ip_compute_csum((void *)ip_header, sizeof(struct iphdr));
-	
-	skb_set_transport_header(sock_buff, sizeof(struct ethhdr) + sizeof(struct iphdr));		
-	icmp_header_m = (struct icmphdr *)icmp_hdr(sock_buff);
-	icmp_header_m->type = 8;		
-	icmp_header_m->code = 0;			
+	ip_header_m->check = ip_compute_csum((void *)ip_header_m, sizeof(struct iphdr));
+			
+	icmp_header_m = icmp_hdr(sock_buff);
+	icmp_header_m->type = ICMP_ECHO;		
+	icmp_header_m->code = 0;
+	icmp_header_m->un.echo.sequence = 0;
+	icmp_header_m->un.echo.id = 0;	
+		
 	icmp_header_m->checksum = 0x00;
-	icmp_header_m->checksum = ip_compute_csum((void *)icmp_header, sizeof(struct icmphdr));
+	icmp_header_m->checksum = ip_compute_csum(icmp_header_m, sizeof(struct icmphdr));
 	
+	net_dev = dev_get_by_name(&init_net, "usb0");
+	sock_buff->dev = net_dev;
+			
+	fl4.flowi4_oif = net_dev->ifindex;
+	fl4.daddr = in_aton(ping);
+	fl4.saddr = in_aton(ping);
 	
-	printk("#######DEBUG INFORMATION#######"); 
-        if (ip_header->protocol==IPPROTO_ICMP) 
-        {
-        	if (icmp_header->type==8)
-        	{			
-               		printk("#######Have a packet ECHO_REQUEST#######"); 	
-        	}
-    		
-    		if (icmp_header->type==0)
-    		{	
-        		printk("#######Have a packet ECHO_REPLY#######");
-        		
-        	}
-        
-                printk("###network_header###");     
-		printk(KERN_INFO "src_ip: %pI4 \n", &ip_header_m->saddr);
-        	printk(KERN_INFO "dst_ip: %pI4\n", &ip_header_m->daddr);
-        	printk(KERN_INFO "ihl: %d\n", ip_header_m->ihl);
-        	printk(KERN_INFO "version: %d\n", ip_header_m->version);
-        	printk(KERN_INFO "tos: %d\n", ip_header_m->tos);
-        	printk(KERN_INFO "id: %d\n", ntohs(ip_header_m->id));
-        	printk(KERN_INFO "frag_off: %d\n", ntohs(ip_header_m->frag_off));
-        	printk(KERN_INFO "ttl: %u\n", ip_header_m->ttl);
-        	printk(KERN_INFO "protocol: %u\n", ip_header_m->protocol);
-        	printk(KERN_INFO "check: %d\n", ip_header_m->check);        	
-        	
-        	printk("##mac_header##");
-        	printk(KERN_INFO "h_dest: %pM \n", &mac_header_m->h_dest);
-        	printk(KERN_INFO "h_source: %pM \n", &mac_header_m->h_source);
-        	printk(KERN_INFO "h_proto: %d \n", ntohs(mac_header_m->h_proto));
-        	
-        	printk("##icmp_header##");
-        	printk(KERN_INFO "type: %u \n", icmp_header_m->type);
-        	printk(KERN_INFO "code: %u \n", icmp_header_m->code);
-        	printk(KERN_INFO "checksum: %d \n", icmp_header_m->checksum);
-               	printk("#######End of a packet#######\n\n");
-        }
-        
-        //ip_local_out(&init_net, NULL, sock_buff);
+	route_table = ip_route_output_key(&init_net, &fl4);
+
+	skb_dst_set(sock_buff, &route_table->dst);
+    
+	pr_info("ip_local_out: %d", ip_local_out(&init_net, NULL, sock_buff));
+	printk(KERN_ALERT "before ip_local_out\n");
+       
 }
 
 static ssize_t b_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
@@ -125,6 +110,7 @@ static ssize_t b_store(struct kobject *kobj, struct kobj_attribute *attr, const 
 	
 	strncpy(ping,buf,sizeof(ping));
 	
+	build_and_send();
 	
 	return count;
 }
@@ -157,8 +143,7 @@ unsigned int hook_func(void *priv, struct sk_buff *skb, const struct nf_hook_sta
         if (ip_header->protocol==IPPROTO_ICMP) 
         {
         	if (icmp_header->type==8)
-        	{	
-        		build_and_send();		
+        	{			
                		printk("#######Have a packet ECHO_REQUEST#######");	
         	}
     		
@@ -217,7 +202,6 @@ int init_module()
         nfho.priority = NF_IP_PRI_FIRST;
         nf_register_net_hook(&init_net, &nfho); 
         printk(KERN_INFO "---------------------------------------\n\n");
-	
 		
         return 0;
 }
