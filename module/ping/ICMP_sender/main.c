@@ -58,42 +58,32 @@ void build_and_send(void)
 	sock_buff = alloc_skb(len_skb, GFP_ATOMIC);
 	
 	skb_reserve(sock_buff, len_skb); 
-	skb_push(sock_buff, sizeof(struct icmphdr));
-	skb_push(sock_buff, sizeof(struct iphdr));
-	skb_push(sock_buff, sizeof(struct ethhdr));
+	skb_push(sock_buff, len_skb);
                 	
-	skb_set_mac_header(sock_buff, 0);       
-        skb_set_network_header(sock_buff, 0);//sizeof(struct ethhdr));	
-        skb_set_transport_header(sock_buff, sizeof(struct iphdr));// + sizeof(struct ethhdr));	
-        
+	skb_set_mac_header(sock_buff, 0);              
         /*mac_header_m = eth_hdr(sock_buff); 
         memcpy(mac_header_m->h_dest,mac_d,6);
         memcpy(mac_header_m->h_source,mac_s,6);
         mac_header_m->h_proto = htons(0);*/
         
+        skb_set_network_header(sock_buff, 0);//sizeof(struct ethhdr));
 	ip_header_m = ip_hdr(sock_buff);
 	ip_header_m->saddr = in_aton(ping);
 	ip_header_m->daddr = in_aton(ping);
-	ip_header_m->ihl = sizeof(struct iphdr)/4;
+	ip_header_m->ihl = 5;
 	ip_header_m->version = 4;
-	ip_header_m->tos = 0;
 	ip_header_m->id = htons(counter);
 	counter++;
-	ip_header_m->frag_off = 0;
-	ip_header_m->ttl = 255;
+	ip_header_m->ttl = 64;
 	ip_header_m->protocol = IPPROTO_ICMP;
 	ip_header_m->tot_len = sizeof(struct iphdr) + sizeof(struct icmphdr);// + sizeof(struct ethhdr);    
 	    		
-	ip_header_m->check = 0x00;
 	ip_header_m->check = ip_compute_csum((void *)ip_header_m, sizeof(struct iphdr));
-			
+	
+	skb_set_transport_header(sock_buff, sizeof(struct iphdr));// + sizeof(struct ethhdr));			
 	icmp_header_m = icmp_hdr(sock_buff);
 	icmp_header_m->type = ICMP_ECHO;		
-	icmp_header_m->code = 0;
-	icmp_header_m->un.echo.sequence = 0;
-	icmp_header_m->un.echo.id = 0;	
 		
-	icmp_header_m->checksum = 0x00;
 	icmp_header_m->checksum = ip_compute_csum(icmp_header_m, sizeof(struct icmphdr));
 	
 	net_dev = dev_get_by_name(&init_net, "usb0");
